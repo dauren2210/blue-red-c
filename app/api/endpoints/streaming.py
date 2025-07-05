@@ -10,7 +10,10 @@ router = APIRouter()
 async def websocket_endpoint(websocket: WebSocket):
     # This is a temporary way to associate a session.
     # In a real app, the session_id might come from the URL path or a message.
-    session_create = SessionCreate(customer_request="New audio stream")
+    session_create = SessionCreate(
+        customer_request="New audio stream", 
+        product_name="Default Product"
+    )
     session = await create_session(session_create)
     session_id = str(session.id)
 
