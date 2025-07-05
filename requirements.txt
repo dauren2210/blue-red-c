@@ -6,4 +6,9 @@ python-dotenv
 pymongo[srv]
 dnspython
 pydantic-settings
-groq 
+groq
+google-search-results
+pydantic
+httpx
+asyncio
+python-multipart
