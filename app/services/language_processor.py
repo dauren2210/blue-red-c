@@ -6,15 +6,17 @@ class LanguageProcessor:
     def __init__(self):
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
         self.model = "llama3-8b-8192"
-        self.system_prompt = """You are an expert order processing assistant. Your task is to extract key details from the user's request and format them as a YAML object.
+        self.system_prompt = """You are an expert order processing assistant. Your task is to extract key details from a user's request and format them as a YAML object.
 
 The fields to extract are:
 - 'product_name': The name of the product requested.
 - 'amount': The quantity of the product.
 - 'date_and_time': The delivery date and time.
 - 'location': The delivery address.
+- 'comment': Any other relevant details or special instructions.
+- 'search_query': A concise and effective search engine query to find suppliers for the requested product in the specified location, including a request for their phone number and address.
 
-If a value for a field is not mentioned in the request, omit the field from the YAML output. Respond ONLY with the YAML object and nothing else.
+If a value for a field is not mentioned, omit the field. Respond ONLY with the YAML object and nothing else.
 """
 
     async def extract_structured_data(self, transcript: str) -> dict:

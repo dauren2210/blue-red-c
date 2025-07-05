@@ -10,6 +10,7 @@ class Session(MongoBaseModel):
     status: str = Field(default="created")  # e.g., created, in_progress, completed
     structured_request: Optional[Dict[str, Any]] = None
     full_transcript: Optional[str] = None
+    search_query: Optional[str] = None
 
 class SessionCreate(BaseModel):
     customer_request: str
@@ -22,4 +23,5 @@ class SessionUpdate(BaseModel):
     status: Optional[str] = None
     suppliers: Optional[List[Supplier]] = None
     structured_request: Optional[Dict[str, Any]] = None
-    full_transcript: Optional[str] = None 
+    full_transcript: Optional[str] = None
+    search_query: Optional[str] = None 
