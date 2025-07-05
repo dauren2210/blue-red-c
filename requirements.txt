@@ -5,4 +5,5 @@ websockets
 python-dotenv
 pymongo[srv]
 dnspython
-pydantic-settings 
+pydantic-settings
+groq 
