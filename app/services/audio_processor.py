@@ -58,14 +58,9 @@ class AudioProcessor:
                 structured_data = await language_processor.extract_structured_data(full_transcript)
                 logging.info(f"Session {self.session_id}: Extracted structured data: {structured_data}")
                 
-                # The search query is now part of the structured data
-                search_query = structured_data.get("search_query", "")
-                logging.info(f"Session {self.session_id}: Extracted Search Query: '{search_query}'")
-
                 update_data = SessionUpdate(
                     full_transcript=full_transcript.strip(),
-                    structured_request=structured_data,
-                    search_query=search_query
+                    structured_request=structured_data
                 )
                 await update_session(self.session_id, update_data)
                 

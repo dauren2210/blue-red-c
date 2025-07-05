@@ -11,8 +11,6 @@ async def create_session(session: SessionCreate) -> Session:
     
     suppliers = [Supplier(**s.dict()) for s in session.suppliers]
     session_to_insert = Session(
-        customer_request=session.customer_request,
-        product_name=session.product_name,
         suppliers=suppliers
     )
     
