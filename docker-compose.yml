@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the local app directory into the container for live reloading
+      - ./app:/app/app
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017
+      - DB_NAME=blue-red-c
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    depends_on:
+      - mongo
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data: 

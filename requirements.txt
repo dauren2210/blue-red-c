@@ -4,4 +4,6 @@ motor
 websockets
 python-dotenv
 pymongo[srv]
-dnspython 
+dnspython
+pydantic-settings
+groq 
