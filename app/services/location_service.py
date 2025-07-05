@@ -277,4 +277,34 @@ class LocationService:
         elif country_code in ["de", "fr", "it", "es", "gb"]:
             return ["alibaba.com", "globalsources.com", "made-in-china.com", "tradekey.com"]
         else:
-            return ["alibaba.com", "globalsources.com", "made-in-china.com"] 
+            return ["alibaba.com", "globalsources.com", "made-in-china.com"]
+    
+    def get_full_location_name(self, location: str) -> str:
+        """
+        Возвращает полное название локации для использования в поисковых запросах
+        """
+        if not location:
+            return "Kazakhstan"
+        
+        location_lower = location.lower().strip()
+        
+        # Очищаем локацию от лишних символов
+        location_clean = re.sub(r'[^\w\s]', ' ', location_lower)
+        location_clean = re.sub(r'\s+', ' ', location_clean).strip()
+        
+        # Разбиваем на слова для поиска
+        words = location_clean.split()
+        
+        # Ищем совпадения и возвращаем полное название
+        for word in words:
+            if word in self.country_language_map:
+                # Возвращаем оригинальное название из словаря
+                return word.title()
+        
+        # Если не нашли точное совпадение, ищем частичные совпадения
+        for key, value in self.country_language_map.items():
+            if key in location_lower:
+                return key.title()
+        
+        # По умолчанию возвращаем Kazakhstan
+        return "Kazakhstan" 

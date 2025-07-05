@@ -33,19 +33,22 @@ class SearchOrchestrator:
         if not product_data and request.product_data:
             product_data = request.product_data
         
-        # Определяем параметры локации
-        location_params = self.location_service.get_search_parameters(product_data) if product_data else {
-            "country_code": "kz",
-            "language": "ru",
-            "primary_language": "ru"
-        }
+        # Получаем параметры локации
+        if product_data:
+            location_params = self.location_service.get_search_parameters(product_data)
+        else:
+            location_params = self.location_service.detect_country_and_language(request.target_location)
+        
+        # Добавляем локацию в параметры для использования в запросах
+        location_params["location"] = request.target_location
         
         # Генерируем поисковые запросы
         search_queries = await self._generate_supplier_queries(
             request.search_query,
             request.amount,
             location_params,
-            request.search_strategy
+            request.search_strategy,
+            request.delivery_date
         )
         
         # Выполняем поиск
@@ -56,7 +59,8 @@ class SearchOrchestrator:
                     query,
                     product_data=product_data,
                     max_results=request.max_results,
-                    search_type=request.search_type
+                    search_type=request.search_type,
+                    location=request.target_location
                 )
                 search_results.append(result)
             except Exception as e:
@@ -66,7 +70,7 @@ class SearchOrchestrator:
         # Анализируем и фильтруем результаты
         supplier_results = await self._analyze_supplier_results(
             search_results,
-            request.product_name,
+            request.search_query,
             location_params
         )
         
@@ -107,6 +111,9 @@ class SearchOrchestrator:
         # Определяем параметры локации
         location_params = self.location_service.get_search_parameters(product_data)
         
+        # Добавляем локацию в параметры для использования в запросах
+        location_params["location"] = request.target_location
+        
         # Генерируем поисковые запросы
         search_queries = await self._generate_product_based_queries(
             product_data.product_name,
@@ -114,7 +121,8 @@ class SearchOrchestrator:
             keywords,
             location_params,
             product_data.amount,
-            bool(product_data.date_and_time)
+            bool(product_data.date_and_time),
+            product_data.date_and_time
         )
         
         # Выполняем многоязычный поиск
@@ -159,45 +167,80 @@ class SearchOrchestrator:
         search_query: str, 
         amount: str, 
         location_params: Dict[str, str],
-        strategy: str = "direct"
+        strategy: str = "direct",
+        date_and_time: str = None
     ) -> List[str]:
         """
         Генерирует поисковые запросы для поиска поставщиков на основе search_query
         """
+        # Получаем полное название локации
+        location_service = LocationService()
+        full_location = location_service.get_full_location_name(location_params.get("location", ""))
+        
         # Базовый запрос из search_query
-        base_query = f"{search_query} поставщик"
+        base_query = f"{search_query} supplier"
         
         # Добавляем ключевые слова в зависимости от стратегии
         if strategy == "direct":
             queries = [
-                f"{base_query} {location_params['country_code']}",
-                f"{search_query} купить оптом {location_params['country_code']}",
-                f"{search_query} поставщики {location_params['country_code']}"
+                f"{base_query} in {full_location}",
+                f"{search_query} wholesale in {full_location}",
+                f"{search_query} suppliers in {full_location}"
             ]
+            
+            # Добавляем новый шаблон "buy {product} in {location} deliver {date}"
+            if date_and_time:
+                queries.append(f"buy {search_query} in {full_location} deliver {date_and_time}")
+            
         elif strategy == "catalog":
             queries = [
-                f"{search_query} каталог поставщиков {location_params['country_code']}",
-                f"{search_query} прайс-лист поставщики {location_params['country_code']}",
-                f"{search_query} оптовые поставщики {location_params['country_code']}"
+                f"{search_query} supplier catalog in {full_location}",
+                f"{search_query} price list suppliers in {full_location}",
+                f"{search_query} wholesale suppliers in {full_location}"
             ]
+            
+            if date_and_time:
+                queries.append(f"buy {search_query} in {full_location} deliver {date_and_time} catalog")
+                
         elif strategy == "trusted":
             queries = [
-                f"{search_query} проверенные поставщики {location_params['country_code']}",
-                f"{search_query} надежные поставщики {location_params['country_code']}",
-                f"{search_query} официальные поставщики {location_params['country_code']}"
+                f"{search_query} verified suppliers in {full_location}",
+                f"{search_query} reliable suppliers in {full_location}",
+                f"{search_query} official suppliers in {full_location}"
             ]
+            
+            if date_and_time:
+                queries.append(f"buy {search_query} in {full_location} deliver {date_and_time} trusted supplier")
+                
         elif strategy == "local":
             queries = [
-                f"{search_query} местные поставщики {location_params['country_code']}",
-                f"{search_query} региональные поставщики {location_params['country_code']}",
-                f"{search_query} поставщики рядом {location_params['country_code']}"
+                f"{search_query} local suppliers in {full_location}",
+                f"{search_query} regional suppliers in {full_location}",
+                f"{search_query} nearby suppliers in {full_location}"
             ]
+            
+            if date_and_time:
+                queries.append(f"buy {search_query} in {full_location} deliver {date_and_time} local")
         else:
             queries = [base_query]
+            if date_and_time:
+                queries.append(f"buy {search_query} in {full_location} deliver {date_and_time}")
         
         # Добавляем информацию о количестве если указана
         if amount:
-            queries = [f"{q} {amount}" for q in queries]
+            # Добавляем количество к запросам с датой
+            enhanced_queries = []
+            for query in queries:
+                enhanced_queries.append(query)
+                if "buy" in query and date_and_time:
+                    enhanced_queries.append(f"{query} {amount}")
+            
+            # Добавляем количество к обычным запросам
+            for query in queries:
+                if "buy" not in query:
+                    enhanced_queries.append(f"{query} {amount}")
+            
+            queries = enhanced_queries
         
         return queries
     
@@ -208,30 +251,43 @@ class SearchOrchestrator:
         keywords: List[str],
         location_params: Dict[str, str],
         amount: str = None,
-        is_urgent: bool = False
+        is_urgent: bool = False,
+        date_and_time: str = None
     ) -> List[str]:
         """
         Генерирует запросы на основе search_query
         """
+        # Получаем полное название локации
+        location_service = LocationService()
+        full_location = location_service.get_full_location_name(location_params.get("location", ""))
+        
         queries = []
         
         # Основной запрос из search_query
         main_query = f"{search_query} {supplier_type}"
         
-        queries.append(f"{main_query} {location_params['country_code']}")
+        queries.append(f"{main_query} in {full_location}")
         
         # Запрос с количеством
         if amount:
-            queries.append(f"{main_query} {amount} {location_params['country_code']}")
+            queries.append(f"{main_query} {amount} in {full_location}")
         
         # Запрос с датой (если срочно)
         if is_urgent:
-            queries.append(f"{main_query} срочно {location_params['country_code']}")
+            queries.append(f"{main_query} urgent in {full_location}")
         
         # Запрос с ключевыми словами
         if keywords:
-            keywords_query = f"{search_query} {' '.join(keywords[:3])} {location_params['country_code']}"
+            keywords_query = f"{search_query} {' '.join(keywords[:3])} in {full_location}"
             queries.append(keywords_query)
+        
+        # Добавляем новый шаблон "buy {product} in {location} deliver {date}"
+        if date_and_time:
+            queries.append(f"buy {search_query} in {full_location} deliver {date_and_time}")
+            
+            # Комбинируем с количеством
+            if amount:
+                queries.append(f"buy {search_query} in {full_location} deliver {date_and_time} {amount}")
         
         return queries
     
@@ -242,21 +298,21 @@ class SearchOrchestrator:
         product_name = product_data.product_name.lower()
         
         # Определяем тип поставщика
-        supplier_type = "поставщик"
-        if any(word in product_name for word in ["электроника", "техника", "компьютер"]):
-            supplier_type = "дистрибьютор электроники"
-        elif any(word in product_name for word in ["одежда", "обувь", "текстиль"]):
-            supplier_type = "оптовый поставщик одежды"
-        elif any(word in product_name for word in ["продукты", "еда", "питание"]):
-            supplier_type = "поставщик продуктов"
-        elif any(word in product_name for word in ["строительство", "материалы"]):
-            supplier_type = "поставщик строительных материалов"
+        supplier_type = "supplier"
+        if any(word in product_name for word in ["electronics", "computer", "laptop", "smartphone"]):
+            supplier_type = "electronics distributor"
+        elif any(word in product_name for word in ["clothing", "shoes", "textile"]):
+            supplier_type = "wholesale clothing supplier"
+        elif any(word in product_name for word in ["food", "products", "nutrition"]):
+            supplier_type = "food supplier"
+        elif any(word in product_name for word in ["construction", "materials"]):
+            supplier_type = "construction materials supplier"
         
         # Извлекаем ключевые слова
         keywords = []
         words = product_name.split()
         for word in words:
-            if len(word) > 3 and word not in ["для", "своих", "этот", "такой"]:
+            if len(word) > 3 and word not in ["for", "the", "this", "that"]:
                 keywords.append(word)
         
         return supplier_type, keywords[:5]  # Возвращаем до 5 ключевых слов
@@ -301,38 +357,29 @@ class SearchOrchestrator:
     ) -> Optional[SupplierResult]:
         """
         Извлекает информацию о поставщике из результата поиска
+        Показывает только те результаты, где есть телефон или email
         """
-        # Простой анализ на основе заголовка и сниппета
-        title = search_result.title.lower()
-        snippet = search_result.snippet.lower()
+        title = search_result.title
+        snippet = search_result.snippet
         link = search_result.link
         
-        # Проверяем, что это действительно поставщик
-        supplier_keywords = ["поставщик", "опт", "дистрибьютор", "производитель", "купить", "продажа"]
-        is_supplier = any(keyword in title or keyword in snippet for keyword in supplier_keywords)
+        # Извлекаем контактную информацию (телефоны и адреса)
+        contact_info = self._extract_contact_info(snippet)
+        email_addresses = self._extract_email_addresses(snippet)
+        has_phone = self._has_phone_number(contact_info, snippet)
+        has_email = len(email_addresses) > 0
         
-        if not is_supplier:
+        if not has_phone and not has_email:
             return None
         
-        # Извлекаем название компании
         company_name = self._extract_company_name(title, snippet)
-        
-        # Определяем тип поставщика
-        supplier_type = "поставщик"
-        if any(word in title for word in ["производитель", "завод", "фабрика"]):
-            supplier_type = "производитель"
-        elif any(word in title for word in ["дистрибьютор", "дистрибуция"]):
-            supplier_type = "дистрибьютор"
-        elif any(word in title for word in ["опт", "оптовый"]):
-            supplier_type = "оптовый поставщик"
-        
-        # Извлекаем контактную информацию
-        contact_info = self._extract_contact_info(snippet)
+        supplier_type = "supplier"
         
         return SupplierResult(
             name=company_name,
             website=link,
             contact_info=contact_info,
+            email_addresses=email_addresses if email_addresses else None,
             supplier_type=supplier_type,
             location=location_params.get("country_code", "kz"),
             rating=0.0,
@@ -352,26 +399,107 @@ class SearchOrchestrator:
     
     def _extract_contact_info(self, snippet: str) -> str:
         """
-        Извлекает контактную информацию из сниппета
+        Извлекает контактную информацию из сниппета (только телефоны и адреса)
+        Собирает все найденные номера телефонов в список
         """
-        # Ищем телефоны, email, адреса
         import re
         
-        # Телефон
-        phone_pattern = r'[\+]?[0-9\s\-\(\)]{10,}'
-        phones = re.findall(phone_pattern, snippet)
+        contact_info = []
         
-        # Email
+        # Телефоны - улучшенные паттерны
+        phone_patterns = [
+            r'\+7\s?\(?[0-9]{3}\)?\s?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}',  # Российский формат
+            r'8\s?\(?[0-9]{3}\)?\s?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}',  # Российский формат с 8
+            r'\+[0-9]{1,3}\s?[0-9]{3,4}\s?[0-9]{3,4}\s?[0-9]{3,4}',  # Международный формат
+            r'[0-9]{3}[\s\-]?[0-9]{3}[\s\-]?[0-9]{4}',  # Американский формат
+            r'[\+]?[0-9\s\-\(\)]{10,}',  # Общий паттерн
+        ]
+        
+        all_phones = []
+        for pattern in phone_patterns:
+            phones = re.findall(pattern, snippet)
+            for phone in phones:
+                # Очищаем от лишних пробелов
+                clean_phone = re.sub(r'\s+', ' ', phone.strip())
+                # Проверяем, что это действительно телефон (минимум 10 цифр)
+                digits_only = re.sub(r'[^\d]', '', clean_phone)
+                if len(digits_only) >= 10 and clean_phone not in all_phones:
+                    all_phones.append(clean_phone)
+        
+        # Добавляем все найденные телефоны
+        if all_phones:
+            phones_str = "; ".join([f"Тел: {phone}" for phone in all_phones])
+            contact_info.append(phones_str)
+        
+        # Адрес (если есть)
+        address_patterns = [
+            r'г\.\s*[А-Яа-я\s]+,\s*[А-Яа-я\s]+',  # "г. Москва, ул. Примерная"
+            r'[А-Яа-я\s]+,\s*[0-9]+',  # "Москва, 123"
+            r'[A-Za-z\s]+,\s*[A-Za-z\s]+,\s*[0-9]+',  # "New York, NY, 12345"
+        ]
+        
+        for pattern in address_patterns:
+            addresses = re.findall(pattern, snippet)
+            if addresses:
+                address = addresses[0].strip()
+                contact_info.append(f"Адрес: {address}")
+                break
+        
+        return "; ".join(contact_info) if contact_info else ""
+    
+    def _extract_email_addresses(self, snippet: str) -> List[str]:
+        """
+        Извлекает все email адреса из сниппета
+        """
+        import re
+        
+        # Паттерн для поиска email адресов
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
         emails = re.findall(email_pattern, snippet)
         
-        contact_info = []
-        if phones:
-            contact_info.append(f"Тел: {phones[0]}")
-        if emails:
-            contact_info.append(f"Email: {emails[0]}")
+        # Убираем дубликаты и возвращаем список
+        unique_emails = list(set(emails))
+        return unique_emails
+    
+    def _has_phone_number(self, contact_info: str, snippet: str) -> bool:
+        """
+        Проверяет наличие номера телефона в контактной информации или сниппете
+        """
+        import re
         
-        return "; ".join(contact_info) if contact_info else ""
+        # Паттерны для поиска телефонов - более гибкие
+        phone_patterns = [
+            r'[\+]?[0-9\s\-\(\)]{10,}',  # Общий паттерн
+            r'\+7\s?\(?[0-9]{3}\)?\s?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}',  # Российский формат
+            r'8\s?\(?[0-9]{3}\)?\s?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}',  # Российский формат с 8
+            r'\+[0-9]{1,3}\s?[0-9]{3,4}\s?[0-9]{3,4}\s?[0-9]{3,4}',  # Международный формат
+            r'[0-9]{3}[\s\-]?[0-9]{3}[\s\-]?[0-9]{4}',  # Американский формат
+            r'тел[а-я]*[:\s]*[0-9\+\-\(\)\s]+',  # "тел: номер"
+            r'phone[:\s]*[0-9\+\-\(\)\s]+',  # "phone: номер"
+            r'телефон[:\s]*[0-9\+\-\(\)\s]+',  # "телефон: номер"
+            r'call[:\s]*[0-9\+\-\(\)\s]+',  # "call: номер"
+            r'contact[:\s]*[0-9\+\-\(\)\s]+',  # "contact: номер"
+        ]
+        
+        # Проверяем в контактной информации
+        for pattern in phone_patterns:
+            matches = re.findall(pattern, contact_info, re.IGNORECASE)
+            for match in matches:
+                # Проверяем, что это действительно телефон (минимум 7 цифр для более гибкой проверки)
+                digits_only = re.sub(r'[^\d]', '', match)
+                if len(digits_only) >= 7:  # Снижаем требования с 10 до 7 цифр
+                    return True
+        
+        # Проверяем в сниппете
+        for pattern in phone_patterns:
+            matches = re.findall(pattern, snippet, re.IGNORECASE)
+            for match in matches:
+                # Проверяем, что это действительно телефон (минимум 7 цифр для более гибкой проверки)
+                digits_only = re.sub(r'[^\d]', '', match)
+                if len(digits_only) >= 7:  # Снижаем требования с 10 до 7 цифр
+                    return True
+        
+        return False
     
     async def _get_product_from_db(self, product_id: str) -> Optional[ProductData]:
         """

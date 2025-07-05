@@ -12,11 +12,11 @@ class Settings(BaseSettings):
     SOME_API_KEY: str = os.getenv("SOME_API_KEY", "your_api_key_here")
     
     # Serp API configuration
-    SERP_API_KEY: str = os.getenv("SERP_API_KEY", "3919c67df490a0646347a57d34542846a7199acead361915c9d071523ac3f7b5")
+    SERP_API_KEY: str = os.getenv("SERP_API_KEY", "3964cda35df1b736b077e8ded6fd02b36f08ed77990e7853113ee96d26c8d962")
     SERP_ENGINE: str = os.getenv("SERP_ENGINE", "google")
     
     # Search configuration
-    MAX_SEARCH_RESULTS: int = int(os.getenv("MAX_SEARCH_RESULTS", "3"))
+    MAX_SEARCH_RESULTS: int = 5
     SEARCH_TIMEOUT: int = int(os.getenv("SEARCH_TIMEOUT", "60"))
 
     class Config:

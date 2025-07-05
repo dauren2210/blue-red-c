@@ -51,6 +51,11 @@ class SerpService:
         if "filetype" in kwargs:
             params["as_filetype"] = kwargs["filetype"]
         
+        # Отладочная информация
+        print(f"DEBUG: Searching with query: {query}")
+        print(f"DEBUG: Location params: {location_params}")
+        print(f"DEBUG: Search params: {params}")
+        
         try:
             loop = asyncio.get_running_loop()
             data = await loop.run_in_executor(
@@ -58,11 +63,20 @@ class SerpService:
                 lambda: GoogleSearch(params).get_dict()
             )
             
+            # Отладочная информация о результатах
+            print(f"DEBUG: Raw response keys: {list(data.keys())}")
+            if "organic_results" in data:
+                print(f"DEBUG: Found {len(data['organic_results'])} organic results")
+            else:
+                print(f"DEBUG: No organic_results in response")
+            
             # Обрабатываем результаты
             results = self._parse_search_results(data, search_type)
             
             end_time = datetime.now()
             search_time = (end_time - start_time).total_seconds()
+            
+            print(f"DEBUG: Parsed {len(results)} results")
             
             return SearchResponse(
                 query=query,
@@ -73,6 +87,7 @@ class SerpService:
             )
             
         except Exception as e:
+            print(f"DEBUG: Error in search: {e}")
             # В случае ошибки возвращаем пустой результат
             return SearchResponse(
                 query=query,
@@ -160,18 +175,57 @@ class SerpService:
         """
         results = []
         
+        print(f"DEBUG: Starting _parse_search_results with search_type: {search_type}")
+        print(f"DEBUG: Data keys: {list(data.keys())}")
+        
         try:
-            if search_type == "web":
+            if search_type == "web" or search_type == "organic":
                 organic_results = data.get("organic_results", [])
+                print(f"DEBUG: organic_results type: {type(organic_results)}")
+                print(f"DEBUG: organic_results length: {len(organic_results) if organic_results else 0}")
+                
+                if organic_results:
+                    print(f"DEBUG: First organic_result type: {type(organic_results[0])}")
+                    print(f"DEBUG: First organic_result: {organic_results[0]}")
+                
+                print(f"DEBUG: Parsing {len(organic_results)} organic results")
+                
+                # Выводим первый результат для диагностики
+                if organic_results:
+                    first_result = organic_results[0]
+                    print(f"DEBUG: First result structure: {list(first_result.keys())}")
+                    print(f"DEBUG: First result title: {first_result.get('title', 'NO_TITLE')}")
+                    print(f"DEBUG: First result link: {first_result.get('link', 'NO_LINK')}")
+                    print(f"DEBUG: First result snippet: {first_result.get('snippet', 'NO_SNIPPET')[:100]}...")
+                
                 for i, result in enumerate(organic_results[:self.max_results]):
-                    results.append(SearchResult(
-                        title=result.get("title", ""),
-                        link=result.get("link", ""),
-                        snippet=result.get("snippet", ""),
-                        position=i + 1,
-                        source=result.get("source", ""),
-                        timestamp=datetime.now()
-                    ))
+                    try:
+                        print(f"DEBUG: Processing result #{i+1}")
+                        print(f"DEBUG: Result keys: {list(result.keys())}")
+                        
+                        title = result.get("title", "")
+                        link = result.get("link", "")
+                        snippet = result.get("snippet", "")
+                        
+                        print(f"DEBUG: Title: {title}")
+                        print(f"DEBUG: Link: {link}")
+                        print(f"DEBUG: Snippet: {snippet[:50]}...")
+                        
+                        search_result = SearchResult(
+                            title=title,
+                            link=link,
+                            snippet=snippet,
+                            position=i + 1,
+                            source=result.get("source", ""),
+                            timestamp=datetime.now()
+                        )
+                        results.append(search_result)
+                        print(f"DEBUG: Successfully created SearchResult #{i+1}")
+                    except Exception as e:
+                        print(f"DEBUG: Error creating SearchResult #{i+1}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
             
             elif search_type == "news":
                 news_results = data.get("news_results", [])
@@ -198,9 +252,11 @@ class SerpService:
                     ))
             
         except Exception as e:
-            # Логируем ошибку парсинга
-            print(f"Error parsing search results: {e}")
+            print(f"DEBUG: Error in _parse_search_results: {e}")
+            import traceback
+            traceback.print_exc()
         
+        print(f"DEBUG: Final parsed results count: {len(results)}")
         return results
     
     async def search_with_fallback(self, query: str, search_type: str = "web", **kwargs) -> SearchResponse:
@@ -392,28 +448,12 @@ class SerpService:
         """
         Улучшает запрос для поиска контактных страниц
         """
-        # Добавляем ключевые слова для контактных страниц
-        contact_terms = " OR ".join([f'"{keyword}"' for keyword in contact_keywords[:5]])  # Берем первые 5
-        
-        # Формируем улучшенный запрос
-        enhanced_query = f'({original_query}) AND ({contact_terms})'
-        
-        # Добавляем специфичные термины для поставщиков
+        # Упрощаем запрос - просто добавляем ключевые слова для поставщиков
         supplier_terms = [
-            "supplier", "vendor", "distributor", "wholesaler", "manufacturer",
-            "поставщик", "дистрибьютор", "оптовик", "производитель"
+            "supplier", "vendor", "distributor", "wholesaler", "manufacturer"
         ]
         
-        # Добавляем термины для контактной информации
-        contact_info_terms = [
-            "phone", "email", "address", "contact form", "get quote",
-            "телефон", "email", "адрес", "форма обратной связи", "получить предложение"
-        ]
+        # Добавляем 1-2 ключевых слова к основному запросу
+        enhanced_query = f"{original_query} {' '.join(supplier_terms[:2])}"
         
-        # Объединяем все термины
-        all_terms = supplier_terms + contact_info_terms
-        terms_query = " OR ".join([f'"{term}"' for term in all_terms[:8]])  # Берем первые 8
-        
-        final_query = f'({enhanced_query}) AND ({terms_query})'
-        
-        return final_query 
+        return enhanced_query 

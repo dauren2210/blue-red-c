@@ -102,6 +102,7 @@ class SupplierResult(BaseModel):
     name: str
     website: Optional[str] = None
     contact_info: Optional[str] = None
+    email_addresses: Optional[List[str]] = None  # Список email адресов
     supplier_type: str = "поставщик"
     location: str = "kz"
     rating: float = 0.0
