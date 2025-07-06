@@ -7,4 +7,6 @@ pymongo[srv]
 dnspython
 pydantic-settings
 groq
-twilio 
+twilio
+requests
+aiofiles 
