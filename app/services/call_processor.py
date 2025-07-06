@@ -293,7 +293,7 @@ RESPONSE FORMAT:
         try:
             # Combine all user inputs from full conversation history
             user_inputs = [
-                msg["content"] for msg in self.full_conversation_history 
+                msg["content"] for msg in self.full_conversation_history[-10:]
                 if msg["role"] == "user"
             ]
             
