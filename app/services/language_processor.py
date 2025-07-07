@@ -1,6 +1,12 @@
 import yaml
 from groq import AsyncGroq
 from app.core.config import settings
+from app.models.call_log import CallLog
+from typing import Dict, List, Optional
+from app.crud.crud_session import get_last_session
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 class LanguageProcessor:
     def __init__(self):
@@ -18,6 +24,8 @@ The fields to extract are:
 
 If a value for a field is not mentioned, omit the field. Respond ONLY with the YAML object and nothing else.
 """
+        # Store conversation history and structured_request per call SID
+        self.sid_conversations: Dict[str, Dict] = {}
 
     async def extract_structured_data(self, transcript: str) -> dict:
         try:
@@ -50,6 +58,95 @@ If a value for a field is not mentioned, omit the field. Respond ONLY with the Y
         except Exception as e:
             print(f"An error occurred while extracting structured data: {e}")
             return {}
+
+    def create_sid(self, sid: str, structured_request: dict):
+        """Initialize a conversation for a new call SID with the structured request."""
+        self.sid_conversations[sid] = {
+            "history": [],
+            "structured_request": structured_request
+        }
+
+    async def supplier_key_data_prompt(self, sid: str, last_supplier_message: str) -> Optional[dict]:
+        """
+        Use the conversation history and structured_request for the call SID to prompt the LLM to extract:
+        - available: true/false/none
+        - price: decimal
+        And generate a short, polite response (max 2 sentences, short for speech).
+        If unavailable, response should politely end the call.
+        Returns a dict: text to be spoken to the supplier.
+        """
+        if sid not in self.sid_conversations:
+            last_session = await get_last_session()
+            if last_session is None:
+                raise ValueError("No last session found")
+            self.create_sid(sid, last_session.structured_request)
+        history: List[dict] = self.sid_conversations[sid]["history"]
+        structured_request = self.sid_conversations[sid]["structured_request"]
+
+        # Add the last message to the history
+        history.append({"role": "supplier", "content": last_supplier_message})
+
+        # Compose the prompt
+        prompt = f"""
+You are a helpful assistant in a phone call with a supplier. 
+The original request of a person you are speaking on behalf of is to find a supplier for specific product in the specified amount.
+You should speak to a supplier to find out if they can provide requested goods described in the following description:
+{structured_request}
+The original request ends here.
+
+Conversation so far:
+"""
+        for turn in history:
+            prompt += f"{turn['role']}: {turn['content']}\n"
+        prompt += """
+Analyze the conversation so far and determine if the supplier is available to fulfill the request.
+If available, extract the price and generate a short, polite response (max 15 words) to the user.
+If unavailable, respond politely and end the call.
+
+You should understand if the requested goods or services are available to be purchased.
+After that find out the price that the supplier is willing to sell the goods or services for.
+
+If the person occurs to be in a confusion state the goods from the original request once more.
+The person on the other end is a human being, they do not see the full history of your conversation with them.
+
+Your task now is to generate a JSON object with the following fields:
+- original_request: a string summarizing the original request
+- reply_to_user: a polite message to the user, maximum 15 words
+Respond ONLY with the JSON object and nothing else.
+"""
+        try:
+            chat_completion = await self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant for phone calls with suppliers."},
+                    {"role": "user", "content": prompt}
+                ],
+                model=self.model,
+                temperature=0,
+                max_tokens=256,
+                top_p=1,
+                stop=None,
+                stream=False,
+            )
+            response_content = chat_completion.choices[0].message.content
+            logging.info(f"LLM generated response: {response_content}")
+            import json
+            try:
+                result = json.loads(response_content)
+            except Exception:
+                import re
+                match = re.search(r'\{.*\}', response_content, re.DOTALL)
+                if match:
+                    result = json.loads(match.group(0))
+                else:
+                    result = {"original_request": str(structured_request), "reply_to_user": response_content}
+            # Only append the reply_to_user to the history
+            reply_to_user = result.get("reply_to_user", "Sorry, I'm having technical issues understanding what to reply to you. I will call you later. Thank you!")
+            history.append({"role": "assistant", "content": reply_to_user})
+            self.sid_conversations[sid]["history"] = history
+            return reply_to_user
+        except Exception as e:
+            print(f"An error occurred in supplier_key_data_prompt: {e}")
+            return None
 
 # Singleton instance
 language_processor = LanguageProcessor() 
