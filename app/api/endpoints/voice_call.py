@@ -3,7 +3,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response
 from app.core.config import settings
 from app.services.language_processor import language_processor
-from app.crud.crud_supplier import update_supplier
+from app.crud.crud_supplier import update_supplier, get_supplier_by_phone
+from app.models.supplier import SupplierUpdate
+from app.models.session import SessionUpdate
 
 import json
 from twilio.rest import Client
@@ -17,7 +19,7 @@ sessions = {}
 @router.post("/twiml")
 async def twiml_endpoint():
     logging.info("Received request for /twiml endpoint.")
-    xml_response = f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Response>\n  <Connect>\n    <ConversationRelay url=\"{settings.WS_URL}\" welcomeGreeting=\"{"Hi, I'm with Blue Red C. I would like to inquire about a possibility to collaborate with your company as a supplier for us."}\" />\n  </Connect>\n</Response>"""
+    xml_response = f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Response>\n  <Connect>\n    <ConversationRelay url=\"{settings.WS_URL}\" welcomeGreeting=\"{"Hi, My name is Brad. I'm with Blue Red C. I would like to inquire about one of your products."}\" />\n  </Connect>\n</Response>"""
     logging.info("Returning TwiML XML response.")
     return Response(content=xml_response, media_type="text/xml")
 
@@ -59,8 +61,15 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             message = json.loads(data)
             logging.info(f"Received message: {message}")
+
             if message["type"] == "setup":
                 call_sid = message["callSid"]
+
+                # Check if the number of the supplier is written down in the call
+                if "supplier_phone" not in language_processor.sid_conversations[call_sid].keys():
+                    supplier_phone = message["to"]
+                    language_processor.sid_conversations[call_sid]["supplier_phone"] = supplier_phone
+
                 websocket.call_sid = call_sid
                 sessions[call_sid] = []
                 logging.info(f"Setup for call: {call_sid}")
@@ -90,6 +99,7 @@ async def websocket_endpoint(websocket: WebSocket):
         logging.info("WebSocket connection closed")
 
         try:
+            supplier_phone = language_processor.sid_conversations[call_sid]["supplier_phone"]
             supplier_found = await get_supplier_by_phone(supplier_phone)
             if supplier_found is None:
                 raise ValueError(f"Supplier not found for phone: {supplier_phone}")
