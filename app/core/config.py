@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     DB_NAME: str = os.getenv("DB_NAME", "blue-red-c")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "your_groq_api_key_here")
+    SERP_API_KEY: str = os.getenv("SERP_API_KEY", "your_serp_api_key_here")
 
     class Config:
         case_sensitive = True

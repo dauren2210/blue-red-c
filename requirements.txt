@@ -1,9 +1,13 @@
 fastapi
 uvicorn[standard]
 motor
-websockets
 python-dotenv
 pymongo[srv]
 dnspython
 pydantic-settings
-groq 
+groq
+pyyaml
+beautifulsoup4==4.12.3
+requests==2.31.0
+websockets
+httpx

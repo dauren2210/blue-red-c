@@ -1,12 +1,13 @@
 import yaml
 from groq import AsyncGroq
 from app.core.config import settings
+from typing import Optional, Dict, Any, List
 
 class LanguageProcessor:
     def __init__(self):
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-        self.model = "llama3-8b-8192"
-        self.system_prompt = """You are an expert order processing assistant. Your task is to extract key details from a user's request and format them as a YAML object.
+        self.default_model = "llama3-8b-8192"
+        self.default_system_prompt = """You are an expert order processing assistant. Your task is to extract key details from a user's request and format them as a YAML object.
 
 The fields to extract are:
 - 'product_name': The name of the product requested.
@@ -19,28 +20,56 @@ The fields to extract are:
 If a value for a field is not mentioned, omit the field. Respond ONLY with the YAML object and nothing else.
 """
 
+    async def process_prompt(
+        self,
+        user_prompt: str,
+        system_prompt: Optional[str] = None,
+        response_format: str = "text",
+        model: Optional[str] = None,
+    ) -> str:
+        if model is None:
+            model = self.default_model
+
+        messages: List[Dict[str, Any]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
+
+        try:
+            request_params = {
+                "messages": messages,
+                "model": model,
+                "temperature": 0,
+                "max_tokens": 2048,  # Increased for webpage analysis
+                "top_p": 1,
+                "stop": None,
+                "stream": False,
+            }
+            if response_format == "json":
+                request_params["response_format"] = {"type": "json_object"}
+
+            chat_completion = await self.client.chat.completions.create(**request_params)
+
+            response_content = chat_completion.choices[0].message.content
+            if response_content is None:
+                raise ValueError("Received None response from Groq API")
+            
+            return response_content
+
+        except Exception as e:
+            print(f"An error occurred while processing prompt: {e}")
+            return ""
+
     async def extract_structured_data(self, transcript: str) -> dict:
         try:
-            chat_completion = await self.client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": self.system_prompt,
-                    },
-                    {
-                        "role": "user",
-                        "content": transcript,
-                    },
-                ],
-                model=self.model,
-                temperature=0,
-                max_tokens=1024,
-                top_p=1,
-                stop=None,
-                stream=False,
+            response_content = await self.process_prompt(
+                system_prompt=self.default_system_prompt,
+                user_prompt=transcript,
             )
             
-            response_content = chat_completion.choices[0].message.content
+            if not response_content:
+                return {}
+
             # The model might sometimes include the yaml ``` markers, so we strip them
             clean_yaml_str = response_content.strip().replace("```yaml", "").replace("```", "").strip()
             

@@ -12,6 +12,7 @@ services:
       - MONGODB_URL=mongodb://mongo:27017
       - DB_NAME=blue-red-c
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - SERP_API_KEY=${SERP_API_KEY}
     depends_on:
       - mongo
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
