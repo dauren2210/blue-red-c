@@ -3,6 +3,10 @@ from bson import ObjectId
 from app.db.mongodb import get_database
 from app.models.supplier import Supplier, SupplierCreate, SupplierUpdate
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 COLLECTION_NAME = "suppliers"
 
 async def create_supplier(supplier: SupplierCreate) -> Supplier:
@@ -35,6 +39,7 @@ async def update_supplier(supplier_id: str, supplier_update: SupplierUpdate) -> 
         )
     
     updated_supplier = await get_supplier(supplier_id)
+    logging.info(f"Updated supplier: {updated_supplier}")
     return updated_supplier
 
 async def delete_supplier(supplier_id: str):

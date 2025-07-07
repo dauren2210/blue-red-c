@@ -4,11 +4,13 @@ from fastapi.responses import Response
 from app.core.config import settings
 from app.services.language_processor import language_processor
 from app.crud.crud_supplier import update_supplier, get_supplier_by_phone
+from app.crud.crud_session import get_last_session
 from app.models.supplier import SupplierUpdate
-from app.models.session import SessionUpdate
+from twilio.rest import Client
 
 import json
-from twilio.rest import Client
+import traceback
+
 
 router = APIRouter()
 
@@ -56,6 +58,7 @@ async def initiate_call(supplier_phone: str, from_phone: str = settings.TWILIO_P
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     call_sid = None
+    last_session = None
     try:
         while True:
             data = await websocket.receive_text()
@@ -64,6 +67,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if message["type"] == "setup":
                 call_sid = message["callSid"]
+
+                last_session = await get_last_session()
+                language_processor.create_sid(call_sid, last_session.structured_request, message["to"])
 
                 websocket.call_sid = call_sid
                 sessions[call_sid] = []
@@ -74,20 +80,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 try:
                     response_content = await language_processor.supplier_key_data_prompt(call_sid, transcript)
                     logging.info(f"Response content: {response_content}")
-                    
-                    # Check if the number of the supplier is written down in the call
-                    if "supplier_phone" not in language_processor.sid_conversations[call_sid].keys():
-                        supplier_phone = message["to"]
-                        language_processor.sid_conversations[call_sid]["supplier_phone"] = supplier_phone
-                        logging.info(f"Supplier phone number is written down in the language processor: {supplier_phone}")
-                    
+
                     await websocket.send_text(json.dumps({
                         "type": "text",
                         "token": response_content,
                         "last": True
                     }))
                 except Exception as e:
-                    logging.error(f"Error processing prompt: {e}")
+                    detailed_error = traceback.format_exc()
+                    logging.error(f"Error processing prompt: {e}\n{detailed_error}")
                     await websocket.send_text(json.dumps({
                         "type": "text",
                         "token": "Sorry, I'm having technical issues right now. I will call you later. Thank you!",
@@ -102,20 +103,21 @@ async def websocket_endpoint(websocket: WebSocket):
 
         try:
             supplier_phone = language_processor.sid_conversations[call_sid]["supplier_phone"]
-            supplier_found = await get_supplier_by_phone(supplier_phone)
+            supplier_found = [s for s in last_session.suppliers if s.phone_numbers[0] == supplier_phone][0]
             if supplier_found is None:
                 raise ValueError(f"Supplier not found for phone: {supplier_phone}")
             supplier_update_data = SupplierUpdate.model_validate({
                 "call_status": "completed", 
                 "response_data": {
-                    "call_sid": call.sid,
+                    "call_sid": call_sid,
                     "call_transcript": language_processor.sid_conversations[call_sid]["history"]
                 }
             })
             logging.info(f"Updating supplier: {supplier_found.id} with data: {supplier_update_data}")
             await update_supplier(supplier_found.id, supplier_update_data)
         except Exception as e:
-            logging.error(f"Error updating supplier: {e}")
+            detailed_error = traceback.format_exc()
+            logging.error(f"Error updating supplier: {e}\n{detailed_error}")
 
         if call_sid:
-            sessions.pop(call_sid, None) 
+            sessions.pop(call_sid, None)

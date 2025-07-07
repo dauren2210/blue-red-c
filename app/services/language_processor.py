@@ -59,11 +59,12 @@ If a value for a field is not mentioned, omit the field. Respond ONLY with the Y
             print(f"An error occurred while extracting structured data: {e}")
             return {}
 
-    def create_sid(self, sid: str, structured_request: dict):
+    def create_sid(self, sid: str, structured_request: dict, supplier_phone: str):
         """Initialize a conversation for a new call SID with the structured request."""
         self.sid_conversations[sid] = {
             "history": [],
-            "structured_request": structured_request
+            "structured_request": structured_request,
+            "supplier_phone": supplier_phone
         }
 
     async def supplier_key_data_prompt(self, sid: str, last_supplier_message: str) -> Optional[dict]:
@@ -75,11 +76,7 @@ If a value for a field is not mentioned, omit the field. Respond ONLY with the Y
         If unavailable, response should politely end the call.
         Returns a dict: text to be spoken to the supplier.
         """
-        if sid not in self.sid_conversations:
-            last_session = await get_last_session()
-            if last_session is None:
-                raise ValueError("No last session found")
-            self.create_sid(sid, last_session.structured_request)
+        
         history: List[dict] = self.sid_conversations[sid]["history"]
         structured_request = self.sid_conversations[sid]["structured_request"]
 
@@ -91,17 +88,24 @@ If a value for a field is not mentioned, omit the field. Respond ONLY with the Y
 You are a helpful assistant in a phone call with a supplier. 
 The original request of a person you are speaking on behalf of is to find a supplier for specific product in the specified amount.
 You should speak to a supplier to find out if they can provide requested goods described in the following description:
+<START of original_request>
 {structured_request}
-The original request ends here.
+<END of original_request>
 
-Conversation so far:
+<START of conversation history>
 """
         for turn in history:
             prompt += f"{turn['role']}: {turn['content']}\n"
         prompt += """
-Analyze the conversation so far and determine if the supplier is available to fulfill the request.
-If available, extract the price and generate a short, polite response (max 15 words) to the user.
-If unavailable, respond politely and end the call.
+<END of conversation history>
+
+Based on the conversation history and original request generate a response to the last message.
+Keep your reply short.
+If in the conversation history the product is not stated, state the requested product and inquire if it is available.
+If in the conversation history the amount is not stated, state the amount of the requested product and inquire if it is available.
+If the place and time is not stated in the conversation history, state it and inquire if it a shipment is available.
+
+If product name, amount, place and time are all stated, end the conversation stating that we will contact the person shortly.
 
 You should understand if the requested goods or services are available to be purchased.
 After that find out the price that the supplier is willing to sell the goods or services for.
@@ -110,7 +114,7 @@ If the person occurs to be in a confusion state the goods from the original requ
 The person on the other end is a human being, they do not see the full history of your conversation with them.
 
 Your task now is to generate a JSON object with the following fields:
-- original_request: a string summarizing the original request
+- original_request: use text from <original request> part of this text as a summary of the original request
 - reply_to_user: a polite message to the user, maximum 15 words
 Respond ONLY with the JSON object and nothing else.
 """
