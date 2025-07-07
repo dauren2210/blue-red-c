@@ -65,11 +65,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if message["type"] == "setup":
                 call_sid = message["callSid"]
 
-                # Check if the number of the supplier is written down in the call
-                if "supplier_phone" not in language_processor.sid_conversations[call_sid].keys():
-                    supplier_phone = message["to"]
-                    language_processor.sid_conversations[call_sid]["supplier_phone"] = supplier_phone
-
                 websocket.call_sid = call_sid
                 sessions[call_sid] = []
                 logging.info(f"Setup for call: {call_sid}")
@@ -79,6 +74,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 try:
                     response_content = await language_processor.supplier_key_data_prompt(call_sid, transcript)
                     logging.info(f"Response content: {response_content}")
+                    
+                    # Check if the number of the supplier is written down in the call
+                    if "supplier_phone" not in language_processor.sid_conversations[call_sid].keys():
+                        supplier_phone = message["to"]
+                        language_processor.sid_conversations[call_sid]["supplier_phone"] = supplier_phone
+                        logging.info(f"Supplier phone number is written down in the language processor: {supplier_phone}")
+                    
                     await websocket.send_text(json.dumps({
                         "type": "text",
                         "token": response_content,
