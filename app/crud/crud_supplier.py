@@ -39,4 +39,11 @@ async def update_supplier(supplier_id: str, supplier_update: SupplierUpdate) -> 
 
 async def delete_supplier(supplier_id: str):
     db = await get_database()
-    await db[COLLECTION_NAME].delete_one({"_id": ObjectId(supplier_id)}) 
+    await db[COLLECTION_NAME].delete_one({"_id": ObjectId(supplier_id)})
+
+async def get_supplier_by_phone(phone: str) -> Supplier:
+    db = await get_database()
+    supplier = await db[COLLECTION_NAME].find_one({"phone_numbers": {"$in": [phone]}})
+    if supplier:
+        return Supplier(**supplier, id=supplier["_id"])
+    return None 

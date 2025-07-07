@@ -52,3 +52,9 @@ async def update_session(session_id: str, session_update: SessionUpdate) -> Sess
     
     updated_session = await get_session(session_id)
     return updated_session 
+
+async def get_last_session() -> Session:
+    db = await get_database()
+    session = await db[COLLECTION_NAME].find_one(sort=[("_id", -1)])
+    if session:
+        return Session(**session, id=session["_id"]) 
