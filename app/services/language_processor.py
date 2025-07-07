@@ -18,6 +18,15 @@ The fields to extract are:
 - 'search_query': A concise and effective search engine query to find suppliers for the requested product in the specified location, including a request for their phone number and address.
 
 If a value for a field is not mentioned, omit the field. Respond ONLY with the YAML object and nothing else.
+---
+**Search Query Guidelines:**
+- The `search_query` should be optimized to find local businesses.
+- It should be phrased naturally, as a human would type into Google Maps.
+- Use the product name and the location.
+- Examples:
+  - If the user asks for "coffee in Paris," a good query would be "coffee suppliers in Paris."
+  - If the user provides a full address like "3 Rue Dupré-Saint-Gervais, Paris," a good query would be "coffee suppliers near 3 Rue Dupré-Saint-Gervais, Paris."
+- Do NOT add extra terms like "phone number" or "address" to the query itself; the search service handles this.
 """
 
     async def process_prompt(

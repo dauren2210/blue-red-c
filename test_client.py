@@ -65,7 +65,7 @@ async def stream_audio(audio_path):
             print("   - Finished sending audio data.")
             
             # 3. Send stop message
-            await websocket.send('{"type": "stop"}')
+            await websocket.send('{"event": "stop"}')
             print("   - Sent stop message.")
 
             # 4. Receive and print responses from the server

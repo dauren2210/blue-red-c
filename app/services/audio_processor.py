@@ -110,18 +110,21 @@ class AudioProcessor:
                         )
 
                         for business in found_suppliers:
-                            analysis = business.get('analysis', {})
+                            # The new structure from supplier_search_service is simpler.
+                            # We extract phone numbers directly. A business might have one or none.
+                            phone_number = business.get("phone")
+                            phone_numbers_list = [phone_number] if phone_number else []
+
                             supplier_create = SupplierCreate(
-                                name=business.get('title'),
-                                phone_numbers=analysis.get('phone_numbers', []),
-                                # Storing other details in response_data
+                                name=business.get("title"),
+                                phone_numbers=phone_numbers_list,
+                                # Storing other details in a flat structure within response_data
                                 response_data={
-                                    "url": business.get('url'),
-                                    "reason": analysis.get('reason'),
-                                    "product_listings": analysis.get('product_listings'),
-                                    "pricing_info": analysis.get('pricing_info'),
-                                    "purchase_options": analysis.get('purchase_options'),
-                                    "contact_required": analysis.get('contact_required'),
+                                    "address": business.get("address"),
+                                    "website": business.get("website"),
+                                    "rating": business.get("rating"),
+                                    "reviews": business.get("reviews"),
+                                    "type": business.get("type"),
                                 }
                             )
                             await create_supplier(supplier_create)
