@@ -6,4 +6,5 @@ python-dotenv
 pymongo[srv]
 dnspython
 pydantic-settings
-groq 
+groq
+twilio

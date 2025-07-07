@@ -3,7 +3,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response
 from app.core.config import settings
 from app.services.language_processor import language_processor
-from app.services.supplier_output_processor import supplier_output_processor
 from app.crud.crud_supplier import update_supplier
 
 import json

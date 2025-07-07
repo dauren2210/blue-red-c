@@ -14,7 +14,10 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
     depends_on:
       - mongo
+    env_file:
+      - .env
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
 
   mongo:
     image: mongo:latest
