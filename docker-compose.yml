@@ -5,6 +5,7 @@ services:
     build: .
     ports:
       - "8000:8000"
+      - "7687:7687"
     volumes:
       # Mount the local app directory into the container for live reloading
       - ./app:/app/app

@@ -11,6 +11,8 @@ from app.services.connection_manager import manager
 from app.services.language_processor import language_processor
 from app.crud.crud_session import update_session
 from app.models.session import SessionUpdate
+from app.services.knowledge_graph_processor import graphiti
+from graphiti_core.nodes import EpisodeType
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,7 +21,7 @@ class AudioProcessor:
         self.session_id = session_id
         self.audio_buffer = bytearray()
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-        self.stt_model = "whisper-large-v3"
+        self.stt_model = "whisper-large-v3-turbo"
 
     def add_audio_chunk(self, chunk: bytes):
         self.audio_buffer.extend(chunk)
@@ -53,6 +55,16 @@ class AudioProcessor:
             full_transcript = transcription_response.text
 
             logging.info(f"Session {self.session_id}: Received transcript from Groq: {full_transcript}")
+
+            logging.info("Sending transcript to knowledge graph processor")
+            await graphiti.add_episode(
+                name="User request on purchasing",
+                episode_body=full_transcript,
+                source=EpisodeType.text,
+                source_description="Blue Red C application usage",
+                # The timestamp for when this episode occurred or was created
+                reference_time=datetime.utcnow(),
+            )
             
             if full_transcript:
                 structured_data = await language_processor.extract_structured_data(full_transcript)

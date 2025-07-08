@@ -27,6 +27,8 @@ async def websocket_endpoint(websocket: WebSocket):
             message = await websocket.receive()
             if message.get("type") == "websocket.disconnect":
                 logging.warning(f"Client initiated disconnect for session: {session_id}")
+                logging.info(f"Calling process_final_audio for session: {session_id}")
+                await audio_processors[session_id].process_final_audio()
                 break
 
             # Handle binary data (audio chunks)
@@ -42,15 +44,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     json_data = json.loads(text_data)
                     if json_data.get("event") == "stop":
                         logging.info(f"Stop event received for session: {session_id}")
-                        if session_id in audio_processors:
-                            logging.info(f"Calling process_final_audio for session: {session_id}")
-                            await audio_processors[session_id].process_final_audio()
-                            logging.info(f"Finished process_final_audio for session: {session_id}")
                         break
                 except json.JSONDecodeError:
                     logging.warning(f"Received non-JSON text message: {text_data}")
 
     except WebSocketDisconnect:
+
+        logging.info(f"Final processing for session: {session_id}")
+        if session_id in audio_processors:
+            logging.info(f"Calling process_final_audio for session: {session_id}")
+            await audio_processors[session_id].process_final_audio()
+            logging.info(f"Finished process_final_audio for session: {session_id}")
+
         logging.info(f"WebSocket disconnected for session: {session_id}")
         manager.disconnect(session_id)
         # Clean up the processor

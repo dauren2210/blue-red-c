@@ -8,3 +8,4 @@ dnspython
 pydantic-settings
 groq
 twilio
+graphiti-core[google-genai]

@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     DOMAIN: str = os.getenv("NGROK_URL")
     WS_URL: str = f"wss://{DOMAIN}/ws/conversation" if DOMAIN else None
 
+    # Google
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY")
+
+    # NEO4J
+    NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "password")
+
     class Config:
         case_sensitive = True
 
