@@ -7,7 +7,7 @@ import io
 import os
 
 # Configuration
-TEXT_TO_SPEAK = "I need 300 cups of coffee by 11am on July 9th, 2025, delivered to Paris, 3 rue Dupré Saint-Gervais."
+TEXT_TO_SPEAK = "I need 300 cups of coffee by 11am on July 9th, 2025, delivered to Paris, Le Carrousel du Louvre."
 WEBSOCKET_URI = "ws://localhost:8000/ws/streaming"
 OUTPUT_FILENAME_MP3 = "temp_audio.mp3"
 OUTPUT_FILENAME_WAV = "test_audio.wav"

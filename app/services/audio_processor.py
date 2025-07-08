@@ -110,24 +110,21 @@ class AudioProcessor:
                         )
 
                         for business in found_suppliers:
-                            # The new structure from supplier_search_service is simpler.
-                            # We extract phone numbers directly. A business might have one or none.
-                            phone_number = business.get("phone")
-                            phone_numbers_list = [phone_number] if phone_number else []
+                            # The new search logic provides a detailed analysis object
+                            analysis = business.get("analysis", {})
+                            phone_numbers = analysis.get("phone_numbers", [])
 
-                            supplier_create = SupplierCreate(
-                                name=business.get("title"),
-                                phone_numbers=phone_numbers_list,
-                                # Storing other details in a flat structure within response_data
-                                response_data={
-                                    "address": business.get("address"),
-                                    "website": business.get("website"),
-                                    "rating": business.get("rating"),
-                                    "reviews": business.get("reviews"),
-                                    "type": business.get("type"),
-                                }
-                            )
-                            await create_supplier(supplier_create)
+                            # We only process suppliers if we found phone numbers
+                            if phone_numbers:
+                                supplier_create = SupplierCreate(
+                                    name=business.get("title"),
+                                    phone_numbers=phone_numbers,
+                                    extra_data={
+                                        "website": business.get("url"),
+                                        "reason": analysis.get("reason"),
+                                    }
+                                )
+                                await create_supplier(supplier_create)
                         
                         logging.info(f"Session {self.session_id}: Saved {len(found_suppliers)} suppliers to the database.")
                         

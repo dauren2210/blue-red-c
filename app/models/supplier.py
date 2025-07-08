@@ -23,5 +23,5 @@ class SupplierUpdate(BaseModel):
     emails: Optional[List[str]] = None
     locations: Optional[List[str]] = None
     call_status: Optional[str] = None
-    response_data: Optional[dict] = None
+    response_data: Optional[dict] = None 
     extra_data: Optional[dict] = None 
